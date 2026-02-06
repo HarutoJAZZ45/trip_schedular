@@ -1,19 +1,33 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Calendar, MapPin, Trash2, Edit2, X, ChevronRight } from "lucide-react";
+import { Plus, Calendar, MapPin, Trash2, Edit2, X, ChevronRight, Share2, Copy, Check } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTrips, Trip } from "@/hooks/useTrip";
 import { useRouter } from "next/navigation";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { ColorPicker } from "@/components/ColorPicker";
 import { DEFAULT_THEME_COLOR } from "@/constants/colors";
+import { auth } from "@/lib/firebase";
+import { signInAnonymously, onAuthStateChanged, User } from "firebase/auth";
 
-import { Map } from "lucide-react";
+import { Map, User as UserIcon } from "lucide-react";
 
 export default function Home() {
   const { trips, addTrip, deleteTrip, updateTrip, selectTrip } = useTrips();
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u: User | null) => {
+      if (u) {
+        setUser(u);
+      } else {
+        signInAnonymously(auth);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
   const [isAdding, setIsAdding] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
 
@@ -24,6 +38,47 @@ export default function Home() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [themeColor, setThemeColor] = useState(DEFAULT_THEME_COLOR);
+
+  // Join Trip State
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinTripId, setJoinTripId] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyId = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleJoinTrip = () => {
+    if (!joinTripId.trim()) return;
+    // Check if already in list
+    if (trips.some(t => t.id === joinTripId.trim())) {
+      alert("この旅行はすでに追加されています。");
+      return;
+    }
+
+    // We add it to the 'my-trips' list (which is cloud synced to user profile)
+    // The data for the trip itself will be fetched via onSnapshot in useTripStorage
+    // once the trip is selected.
+    // For now, we need to know the title etc. to show it in the list.
+    // In a real app, we'd fetch the trip metadata first.
+    // Let's assume for now we just add the ID and let it populate or ask for a simple title.
+
+    const newTrip: Trip = {
+      id: joinTripId.trim(),
+      title: "読み込み中...", // Temporary
+      destinations: [],
+      startDate: "",
+      endDate: "",
+      themeColor: DEFAULT_THEME_COLOR
+    };
+
+    addTrip(newTrip); // This needs to be modified to accept a full Trip object for joining
+    setIsJoining(false);
+    setJoinTripId("");
+  };
 
   const handleOpenAdd = () => {
     setEditingTrip(null);
@@ -122,7 +177,15 @@ export default function Home() {
           <h1 className="font-serif text-3xl text-gray-900 mb-2">My Trips</h1>
           <p className="text-gray-500 text-sm">以前の旅行とこれからの計画</p>
         </div>
-
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-100 shadow-sm">
+          <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center text-white">
+            <UserIcon size={16} />
+          </div>
+          <div className="text-left">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Traveler ID</div>
+            <div className="text-[10px] font-mono text-gray-600 max-w-[80px] truncate">{user?.uid || "..."}</div>
+          </div>
+        </div>
       </div>
 
 
@@ -173,6 +236,13 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={(e) => handleCopyId(e, trip.id)}
+                    className="p-2 text-gray-300 hover:text-blue-500 transition-colors z-10 relative"
+                    title="Copy Trip ID"
+                  >
+                    {copiedId === trip.id ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                  </button>
+                  <button
                     onClick={(e) => handleOpenEdit(trip, e)}
                     className="p-2 text-gray-300 hover:text-gray-600 transition-colors z-10"
                   >
@@ -195,13 +265,52 @@ export default function Home() {
         </motion.div>
       )}
 
-      {/* FAB */}
       <button
         onClick={handleOpenAdd}
-        className="fixed bottom-24 right-6 bg-gray-900 text-white p-4 rounded-full shadow-lg shadow-gray-900/30 hover:scale-105 transition-transform z-30"
+        className="fixed bottom-24 right-6 bg-gray-900 text-white p-4 rounded-full shadow-lg shadow-gray-900/30 hover:scale-105 transition-transform z-30 flex items-center gap-2"
       >
         <Plus size={24} />
       </button>
+
+      {/* Join Button */}
+      <button
+        onClick={() => setIsJoining(true)}
+        className="fixed bottom-24 right-24 bg-white text-gray-900 p-4 rounded-full shadow-lg border border-gray-100 hover:scale-105 transition-transform z-30 flex items-center gap-2"
+      >
+        <Share2 size={24} />
+      </button>
+
+      {/* Join Modal */}
+      <AnimatePresence>
+        {isJoining && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/20 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="font-serif text-xl">共有された旅行に参加</h2>
+                <button onClick={() => setIsJoining(false)}><X size={20} className="text-gray-400" /></button>
+              </div>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">参加したい旅行の「Trip ID」を入力してください。</p>
+                <input
+                  value={joinTripId}
+                  onChange={(e) => setJoinTripId(e.target.value)}
+                  placeholder="Trip ID を入力"
+                  className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900/10 transition-all font-mono text-xs"
+                />
+                <button
+                  onClick={handleJoinTrip}
+                  className="w-full py-4 bg-gray-900 text-white font-medium rounded-2xl shadow-lg shadow-gray-900/20 active:scale-95 transition-transform"
+                >
+                  参加する
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Add/Edit Modal */}
       <AnimatePresence>
