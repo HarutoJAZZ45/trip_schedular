@@ -4,8 +4,9 @@ import { useTripStorage, useTrips } from "@/hooks/useTrip";
 import { motion, AnimatePresence } from "framer-motion";
 import { Coffee, School as Hotel, MapPin, Plane, Utensils, Train, Plus, Trash2, X, Edit2, ChevronLeft, Search } from "lucide-react";
 import { clsx } from "clsx";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { ColorPicker } from "@/components/ColorPicker";
 import { DEFAULT_THEME_COLOR } from "@/constants/colors";
 import { Spot } from "@/types/spot";
@@ -46,6 +47,18 @@ export default function SchedulePage() {
     const [selectedDayIndex, setSelectedDayIndex] = useTripStorage<number>("last-viewed-day-index", 0);
     const [isAdding, setIsAdding] = useState(false);
     const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
+
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const activeDayRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (activeDayRef.current && scrollRef.current) {
+            const container = scrollRef.current;
+            const element = activeDayRef.current;
+            const scrollLeft = element.offsetLeft - container.offsetWidth / 2 + element.offsetWidth / 2;
+            container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+        }
+    }, [selectedDayIndex, schedule]);
 
     // New Event State
     const [newEvent, setNewEvent] = useState<{
@@ -207,15 +220,17 @@ export default function SchedulePage() {
             {/* Header */}
             <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-100 pt-12 pb-4 px-6">
                 <div className="flex items-center gap-2 mb-4">
-                    <Link href="/" className="p-2 -ml-2 text-gray-400 hover:text-gray-900 transition-colors">
+                    <Link href="/" className="flex items-center gap-1 p-2 -ml-2 text-gray-400 hover:text-gray-900 transition-colors group">
                         <ChevronLeft size={24} />
+                        <span className="text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">Home</span>
                     </Link>
                     <h1 className="font-serif text-3xl text-gray-900">Itinerary</h1>
                 </div>
-                <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                <div ref={scrollRef} className="flex gap-4 overflow-x-auto no-scrollbar pb-2 scroll-smooth">
                     {schedule.map((day, i) => (
                         <button
                             key={day.day}
+                            ref={i === selectedDayIndex ? activeDayRef : null}
                             onClick={() => setSelectedDayIndex(i)}
                             className={clsx(
                                 "flex-shrink-0 px-4 py-2 rounded-2xl transition-all border text-center min-w-[80px]",
@@ -308,6 +323,25 @@ export default function SchedulePage() {
                         })}
                     </AnimatePresence>
                 </div>
+            </div>
+
+            {/* Prev/Next Navigation */}
+            <div className="fixed bottom-24 left-6 right-6 flex justify-between pointer-events-none z-30">
+                <button
+                    onClick={() => setSelectedDayIndex(prev => Math.max(0, prev - 1))}
+                    disabled={selectedDayIndex === 0}
+                    className="bg-white/90 backdrop-blur-md text-gray-900 p-4 rounded-full shadow-lg border border-gray-100 pointer-events-auto disabled:opacity-0 disabled:pointer-events-none active:scale-95 transition-all"
+                >
+                    <ChevronLeft size={24} />
+                </button>
+                <div className="flex-1" /> {/* Spacer */}
+                <button
+                    onClick={() => setSelectedDayIndex(prev => Math.min(schedule.length - 1, prev + 1))}
+                    disabled={selectedDayIndex === schedule.length - 1}
+                    className="bg-white/90 backdrop-blur-md text-gray-900 p-4 rounded-full shadow-lg border border-gray-100 pointer-events-auto disabled:opacity-0 disabled:pointer-events-none active:scale-95 transition-all mr-20"
+                >
+                    <ChevronRight size={24} />
+                </button>
             </div>
 
             {/* FAB */}

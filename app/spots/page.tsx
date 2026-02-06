@@ -97,8 +97,9 @@ function SpotsContent() {
             <div className="pt-12 px-6 pb-6">
                 <div className="flex justify-between items-end mb-6">
                     <div>
-                        <Link href="/" className="inline-block p-2 -ml-2 mb-2 text-gray-400 hover:text-gray-900 transition-colors">
+                        <Link href="/" className="flex items-center gap-1 p-2 -ml-2 mb-2 text-gray-400 hover:text-gray-900 transition-colors group">
                             <ChevronLeft size={24} />
+                            <span className="text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">Home</span>
                         </Link>
                         <h1 className="font-serif text-3xl text-gray-900 mb-2">Saved Spots</h1>
                         <p className="text-muted text-sm">行きたい場所リスト</p>
