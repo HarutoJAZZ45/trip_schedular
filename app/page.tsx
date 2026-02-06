@@ -9,7 +9,7 @@ import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { ColorPicker } from "@/components/ColorPicker";
 import { DEFAULT_THEME_COLOR } from "@/constants/colors";
 import { auth } from "@/lib/firebase";
-import { signInAnonymously, onAuthStateChanged, User } from "firebase/auth";
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signOut } from "firebase/auth";
 
 import { Map, User as UserIcon } from "lucide-react";
 
@@ -18,13 +18,26 @@ export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
 
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google Sign-In Error:", error);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Sign-Out Error:", error);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u: User | null) => {
-      if (u) {
-        setUser(u);
-      } else {
-        signInAnonymously(auth);
-      }
+      setUser(u);
     });
     return () => unsubscribe();
   }, []);
@@ -104,13 +117,13 @@ export default function Home() {
 
 
 
-  const handleSaveTrip = () => {
+  const handleSaveTrip = async () => {
     if (!title) return;
 
     if (editingTrip) {
       updateTrip(editingTrip.id, { title, destinations, startDate, endDate, themeColor });
     } else {
-      const newTripId = addTrip({ title, destinations, startDate, endDate, themeColor });
+      const newTripId = await addTrip({ title, destinations, startDate, endDate, themeColor });
 
       // Auto-generate schedule if dates are present
       if (startDate && endDate) {
@@ -126,8 +139,13 @@ export default function Home() {
             events: []
           }));
 
+          // Save to Firestore via the cloud-synced storage
           if (typeof window !== "undefined") {
-            localStorage.setItem(`trip_${newTripId}_my-itinerary`, JSON.stringify(initialSchedule));
+            // We need to use the trip-specific storage, but we can't call hooks here
+            // So we'll save it directly to Firestore
+            const { db } = await import("@/lib/firebase");
+            const { doc, setDoc } = await import("firebase/firestore");
+            await setDoc(doc(db, `trips/${newTripId}/data/my-itinerary`), { value: initialSchedule }, { merge: true });
           }
         } catch (e) {
           console.error("Invalid dates for schedule generation", e);
@@ -177,15 +195,36 @@ export default function Home() {
           <h1 className="font-serif text-3xl text-gray-900 mb-2">My Trips</h1>
           <p className="text-gray-500 text-sm">以前の旅行とこれからの計画</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-100 shadow-sm">
-          <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center text-white">
-            <UserIcon size={16} />
+        {user ? (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-100 shadow-sm">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full" />
+              ) : (
+                <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center text-white">
+                  <UserIcon size={16} />
+                </div>
+              )}
+              <div className="text-left">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Logged In</div>
+                <div className="text-[10px] text-gray-600 max-w-[100px] truncate">{user.displayName || user.email || "User"}</div>
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+            >
+              Sign Out
+            </button>
           </div>
-          <div className="text-left">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Traveler ID</div>
-            <div className="text-[10px] font-mono text-gray-600 max-w-[80px] truncate">{user?.uid || "..."}</div>
-          </div>
-        </div>
+        ) : (
+          <button
+            onClick={handleGoogleSignIn}
+            className="px-4 py-2 bg-gray-900 text-white text-sm rounded-full shadow-lg hover:scale-105 transition-transform"
+          >
+            Sign In with Google
+          </button>
+        )}
       </div>
 
 
