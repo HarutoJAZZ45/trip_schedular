@@ -76,6 +76,7 @@ export default function PackingPage() {
     });
     const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null);
     const [isEditingRate, setIsEditingRate] = useState(false);
+    const [sortMode, setSortMode] = useState<"recent" | "date-desc" | "date-asc">("recent");
 
     // Member State
     const [isManagingMembers, setIsManagingMembers] = useState(false);
@@ -267,6 +268,46 @@ export default function PackingPage() {
 
     const jpyBalances = getBalances();
 
+    // Settlement Algorithm: Calculate who pays whom
+    const settlements = useMemo(() => {
+        const netBalances = jpyBalances.map(b => ({ id: b.id, name: b.name, balance: b.balance }));
+        const debtors = netBalances.filter(b => b.balance < -0.01).sort((a, b) => a.balance - b.balance);
+        const creditors = netBalances.filter(b => b.balance > 0.01).sort((a, b) => b.balance - a.balance);
+
+        const transfers: { from: string, fromName: string, to: string, toName: string, amount: number }[] = [];
+
+        let i = 0, j = 0;
+        while (i < debtors.length && j < creditors.length) {
+            const debtor = debtors[i];
+            const creditor = creditors[j];
+            const amount = Math.min(-debtor.balance, creditor.balance);
+
+            transfers.push({
+                from: debtor.id,
+                fromName: debtor.name,
+                to: creditor.id,
+                toName: creditor.name,
+                amount: Math.round(amount)
+            });
+
+            debtor.balance += amount;
+            creditor.balance -= amount;
+
+            if (debtor.balance >= -0.01) i++;
+            if (creditor.balance <= 0.01) j++;
+        }
+        return transfers;
+    }, [jpyBalances]);
+
+    // Sorted Expenses
+    const sortedExpenses = useMemo(() => {
+        const list = [...expenses];
+        if (sortMode === "recent") return list; // createdAt desc is default in saveExpense
+        if (sortMode === "date-desc") return list.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+        if (sortMode === "date-asc") return list.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
+        return list;
+    }, [expenses, sortMode]);
+
     return (
         <div className="min-h-full bg-slate-50 pb-32">
             {/* Tab Header */}
@@ -412,7 +453,7 @@ export default function PackingPage() {
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="space-y-2 text-sm">
+                                    <div className="space-y-4 text-sm">
                                         {jpyBalances.map(m => (
                                             <div key={m.id} className="flex justify-between border-b border-white/10 pb-2 last:border-0">
                                                 <span>{m.name}</span>
@@ -424,14 +465,48 @@ export default function PackingPage() {
                                                 </div>
                                             </div>
                                         ))}
+
+                                        {settlements.length > 0 && (
+                                            <div className="mt-4 pt-4 border-t border-white/20">
+                                                <h4 className="text-[10px] text-white/40 uppercase tracking-widest mb-3">Suggested Settlement</h4>
+                                                <div className="space-y-2">
+                                                    {settlements.map((s, idx) => (
+                                                        <div key={idx} className="flex items-center justify-between bg-white/5 p-2 rounded-lg">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium text-rose-300">{s.fromName}</span>
+                                                                <ArrowRight size={10} className="text-white/20" />
+                                                                <span className="font-medium text-emerald-300">{s.toName}</span>
+                                                            </div>
+                                                            <span className="font-mono font-bold">¥{s.amount.toLocaleString()}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
                             {/* History */}
                             <div className="space-y-3">
-                                <h3 className="text-xs uppercase tracking-wider text-muted font-bold">History</h3>
-                                {expenses.slice().sort((a, b) => b.createdAt - a.createdAt).map((item) => {
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-xs uppercase tracking-wider text-muted font-bold">History</h3>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => setSortMode("recent")}
+                                            className={clsx("text-[10px] px-2 py-1 rounded-full border transition-colors", sortMode === "recent" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-500 border-gray-100 hover:border-gray-300")}
+                                        >
+                                            Recent
+                                        </button>
+                                        <button
+                                            onClick={() => setSortMode(sortMode === "date-desc" ? "date-asc" : "date-desc")}
+                                            className={clsx("text-[10px] px-2 py-1 rounded-full border transition-colors flex items-center gap-1", sortMode.startsWith("date") ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-500 border-gray-100 hover:border-gray-300")}
+                                        >
+                                            Date {sortMode === "date-asc" ? "↑" : "↓"}
+                                        </button>
+                                    </div>
+                                </div>
+                                {sortedExpenses.map((item) => {
                                     const jpyAmount = item.currency === 'EUR' ? item.amount * exchangeRate : item.amount;
                                     return (
                                         <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative group">
