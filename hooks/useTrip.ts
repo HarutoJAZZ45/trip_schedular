@@ -17,11 +17,17 @@ export interface Trip {
 
 // Keys that should be synced to the cloud
 const CLOUD_SYNC_KEYS = [
-    "my-trips",        // Note: renamed from all-trips to be more specific in cloud
-    "my-itinerary",
-    "saved-spots",
-    "trip-expenses",
-    "trip-members"
+    "my-trips",        // User profile: list of trips
+    "my-itinerary",    // Trip-shared: schedule
+    "saved-spots",     // Trip-shared: spots
+    "trip-expenses",   // Trip-shared: expenses
+    "trip-members",    // Trip-shared: members
+    "packing-list"     // User-specific: packing list (not shared)
+];
+
+// Keys that should be stored per-user (not shared with trip collaborators)
+const USER_SPECIFIC_KEYS = [
+    "packing-list"
 ];
 
 // Wrapper for useLocalStorage that optionally syncs with Firestore
@@ -53,11 +59,16 @@ export function useTripStorage<T>(key: string, initialValue: T) {
         }
 
         // Determine Firestore doc path
-        // For 'my-trips', it's user-specific: users/{uid}/data/trips
-        // For trip-specific data: trips/{tripId}/data/{key}
-        const docPath = key === "my-trips"
-            ? `users/${userId}/profile/trips`
-            : currentTripId ? `trips/${currentTripId}/data/${key}` : null;
+        let docPath: string | null = null;
+        if (key === "my-trips") {
+            docPath = `users/${userId}/profile/trips`;
+        } else if (USER_SPECIFIC_KEYS.includes(key) && currentTripId) {
+            // User-specific data (e.g., packing list)
+            docPath = `users/${userId}/trips/${currentTripId}/${key}`;
+        } else if (currentTripId) {
+            // Trip-shared data (e.g., schedule, spots, expenses)
+            docPath = `trips/${currentTripId}/data/${key}`;
+        }
 
         if (!docPath) return;
 
@@ -85,9 +96,14 @@ export function useTripStorage<T>(key: string, initialValue: T) {
         setLocalValue(resolvedValue);
 
         if (isCloudSync && userId && !skipCloudUpdate.current) {
-            const docPath = key === "my-trips"
-                ? `users/${userId}/profile/trips`
-                : currentTripId ? `trips/${currentTripId}/data/${key}` : null;
+            let docPath: string | null = null;
+            if (key === "my-trips") {
+                docPath = `users/${userId}/profile/trips`;
+            } else if (USER_SPECIFIC_KEYS.includes(key) && currentTripId) {
+                docPath = `users/${userId}/trips/${currentTripId}/${key}`;
+            } else if (currentTripId) {
+                docPath = `trips/${currentTripId}/data/${key}`;
+            }
 
             if (docPath) {
                 await setDoc(doc(db, docPath), { value: resolvedValue }, { merge: true });

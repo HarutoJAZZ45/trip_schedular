@@ -7,6 +7,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
+    // User-specific trip data (e.g., packing lists - not shared)
+    match /users/{userId}/trips/{tripId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
     // Trip data (shared among collaborators)
     match /trips/{tripId}/{document=**} {
       allow read: if request.auth != null;
