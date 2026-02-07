@@ -17,6 +17,7 @@ export default function Home() {
   const { trips, addTrip, deleteTrip, updateTrip, selectTrip } = useTrips();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const handleGoogleSignIn = async () => {
     const provider = new GoogleAuthProvider();
@@ -36,6 +37,7 @@ export default function Home() {
   };
 
   useEffect(() => {
+    setMounted(true);
     const unsubscribe = onAuthStateChanged(auth, (u: User | null) => {
       setUser(u);
     });
@@ -183,8 +185,17 @@ export default function Home() {
     show: { opacity: 1, y: 0 }
   };
 
-  // Show Sign-In screen if not authenticated
-  if (!user) {
+  // Show Sign-In screen if not authenticated (only after mounting to prevent hydration error)
+  if (!mounted || !user) {
+    if (!mounted) {
+      // Show loading state during hydration
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
+          <div className="text-gray-400">Loading...</div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center px-6">
         <motion.div
