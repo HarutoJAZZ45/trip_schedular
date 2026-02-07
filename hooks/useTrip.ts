@@ -114,7 +114,9 @@ export function useTripStorage<T>(key: string, initialValue: T) {
             }
 
             if (docPath) {
+                console.log(`[useTripStorage] Writing to Firestore:`, { key, docPath, userId, dataLength: JSON.stringify(resolvedValue).length });
                 await setDoc(doc(db, docPath), { value: resolvedValue }, { merge: true });
+                console.log(`[useTripStorage] Write successful:`, { key, docPath });
             }
         }
     };
