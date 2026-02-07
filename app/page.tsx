@@ -259,7 +259,11 @@ export default function Home() {
       </div>
 
 
-      {trips.length === 0 ? (
+      {!mounted ? (
+        <div className="flex items-center justify-center p-12">
+          <div className="text-gray-400">Loading trips...</div>
+        </div>
+      ) : trips.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-center text-gray-400">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
             <MapPin size={24} />
