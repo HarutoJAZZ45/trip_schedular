@@ -71,7 +71,10 @@ export function useTripStorage<T>(key: string, initialValue: T) {
             docPath = `trips/${currentTripId}/data/${key}`;
         }
 
-        if (!docPath) return;
+        if (!docPath) {
+            setValue(localValue);
+            return;
+        }
 
         const docRef = doc(db, docPath);
 
@@ -82,11 +85,14 @@ export function useTripStorage<T>(key: string, initialValue: T) {
                 setValue(cloudData);
                 setLocalValue(cloudData); // Keeps local in sync for offline
                 setTimeout(() => { skipCloudUpdate.current = false; }, 100);
+            } else {
+                // Document doesn't exist yet, use local value
+                setValue(localValue);
             }
         });
 
         return () => unsub();
-    }, [isCloudSync, userId, currentTripId, key, setLocalValue, localValue]);
+    }, [isCloudSync, userId, currentTripId, key, setLocalValue]);
 
     // 4. Update function
     const updateValue = async (newValue: T | ((prev: T) => T)) => {
